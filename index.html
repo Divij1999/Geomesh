@@ -5,23 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
   <title>GeoMesh | P2P Proximity</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="./styles.css">
   <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#10b981">
+  <meta name="theme-color" content="#008069">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <style>
-    body {
-      overscroll-behavior-y: contain;
-      background-color: #0f172a;
-      -webkit-tap-highlight-color: transparent;
-      margin: 0;
-      color: white;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .loader { width: 40px; height: 40px; border: 3px solid #10b981; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
-  </style>
 
 <script type="importmap">
 {
@@ -38,13 +27,12 @@
 </head>
 <body>
   <div id="root">
-    <div id="boot-screen" style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a; text-align: center; padding: 20px;">
+    <div id="boot-screen" class="boot-screen">
       <div class="loader"></div>
-      <div id="boot-status" style="color: #10b981; font-weight: 900; letter-spacing: 2px; font-size: 10px; text-transform: uppercase; margin-bottom: 10px;">Initializing Secure Mesh...</div>
-      <div id="boot-subtext" style="color: #475569; font-size: 11px;">Loading P2P Protocols</div>
-      
-      <button id="retry-btn" onclick="clearAndReload()" style="display: none; margin-top: 20px; padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 14px;">
-        Force Reset & Reload
+      <div id="boot-status" class="boot-status">Establishing Secure Mesh...</div>
+      <div id="boot-subtext" class="boot-subtext">Initializing P2P Protocols</div>
+      <button id="retry-btn" onclick="clearAndReload()" class="retry-btn" style="display: none;">
+        Reset & Retry
       </button>
     </div>
   </div>
@@ -60,20 +48,17 @@
       location.reload();
     }
 
-    // Diagnostic Timeout
     setTimeout(() => {
       if (!window.__GEOMESH_MOUNTED__) {
         const status = document.getElementById('boot-status');
-        const subtext = document.getElementById('boot-subtext');
         const retryBtn = document.getElementById('retry-btn');
         if (status) {
-          status.innerText = "Boot Failure";
+          status.innerText = "Connection Error";
           status.style.color = '#ef4444';
         }
-        if (subtext) subtext.innerText = "Module initialization failed. This usually happens if the Service Worker caches raw source files.";
         if (retryBtn) retryBtn.style.display = 'block';
       }
-    }, 6000);
+    }, 8000);
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {

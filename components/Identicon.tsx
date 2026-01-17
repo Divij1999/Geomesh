@@ -4,10 +4,11 @@ import React from 'react';
 interface IdenticonProps {
   seed: string;
   size?: number;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-export const Identicon: React.FC<IdenticonProps> = ({ seed, size = 40 }) => {
-  // Simple deterministic color generation from string
+export const Identicon: React.FC<IdenticonProps> = ({ seed, size = 40, className = "", style = {} }) => {
   const getHashColor = (str: string) => {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -21,12 +22,13 @@ export const Identicon: React.FC<IdenticonProps> = ({ seed, size = 40 }) => {
   
   return (
     <div 
-      className="flex items-center justify-center rounded-full text-white font-bold overflow-hidden shrink-0 shadow-sm border border-white/20"
+      className={`identicon ${className}`}
       style={{ 
         width: size, 
         height: size, 
         backgroundColor: bgColor,
-        fontSize: size * 0.4
+        fontSize: size * 0.4,
+        ...style
       }}
     >
       {seed.substring(0, 2).toUpperCase()}
