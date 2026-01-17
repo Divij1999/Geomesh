@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'geomesh-v7'; // Bumped version to clear bad octet-stream caches
+const CACHE_NAME = 'geomesh-v8-nuclear';
 const ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
+      // Only cache static assets, never code files during install
       return Promise.allSettled(ASSETS.map(url => cache.add(url)));
     })
   );
@@ -30,9 +31,16 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // BYPASS: Never handle .tsx, .ts, or .jsx files. 
-  // Let the browser fetch them directly so the server can provide the correct JavaScript MIME type.
-  if (url.pathname.endsWith('.tsx') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.jsx')) {
+  // CRITICAL FIX:
+  // Strictly bypass the cache for any file that looks like source code (.tsx, .ts, .jsx).
+  // These MUST go to the server to be transpiled into valid JavaScript.
+  // If we serve them from cache, the browser gets raw text/octet-stream and crashes.
+  if (url.pathname.match(/\.(tsx|ts|jsx)$/)) {
+    return; // Fallback to network only
+  }
+
+  // Also bypass cache for the hot module replacement (HMR) if present
+  if (url.pathname.includes('hmr') || url.pathname.includes('hot-update')) {
     return;
   }
 
@@ -41,8 +49,13 @@ self.addEventListener('fetch', (event) => {
       if (cachedResponse) return cachedResponse;
 
       return fetch(event.request).then((response) => {
-        // Don't cache if not a successful internal GET request
+        // Only cache valid 200 responses that are basic GET requests
         if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
+          return response;
+        }
+
+        // Double check: Never cache source files even if we fetched them
+        if (url.pathname.match(/\.(tsx|ts|jsx)$/)) {
           return response;
         }
 

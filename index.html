@@ -12,6 +12,18 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
+  <!-- EMERGENCY SW CLEANUP: Run this before anything else -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for(let registration of registrations) {
+          // Unregister existing SWs to clear the MIME type error cache
+          registration.unregister();
+        }
+      });
+    }
+  </script>
+
 <script type="importmap">
 {
   "imports": {
@@ -31,40 +43,42 @@
       <div class="loader"></div>
       <div id="boot-status" class="boot-status">Establishing Secure Mesh...</div>
       <div id="boot-subtext" class="boot-subtext">Initializing P2P Protocols</div>
-      <button id="retry-btn" onclick="clearAndReload()" class="retry-btn" style="display: none;">
-        Reset & Retry
-      </button>
     </div>
   </div>
 
-  <script>
-    function clearAndReload() {
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(registrations => {
-          for(let registration of registrations) registration.unregister();
-        });
-      }
-      localStorage.clear();
-      location.reload();
-    }
+  <!-- MAIN ENTRY POINT -->
+  <script type="module" src="./index.tsx"></script>
 
+  <script>
+    // Only register the NEW Service Worker after the app has successfully loaded
+    // This prevents the race condition where the SW caches the index.tsx before it's ready
+    window.addEventListener('load', () => {
+      // Delay registration slightly to prioritize main thread rendering
+      setTimeout(() => {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('./sw.js').then(reg => {
+            console.log('SW Registered');
+          }).catch(err => {
+            console.log('SW Registration failed', err);
+          });
+        }
+      }, 1000);
+    });
+
+    // Fallback error handler
     setTimeout(() => {
       if (!window.__GEOMESH_MOUNTED__) {
         const status = document.getElementById('boot-status');
-        const retryBtn = document.getElementById('retry-btn');
+        const subtext = document.getElementById('boot-subtext');
         if (status) {
-          status.innerText = "Connection Error";
+          status.innerText = "Boot Error";
           status.style.color = '#ef4444';
         }
-        if (retryBtn) retryBtn.style.display = 'block';
+        if (subtext) {
+          subtext.innerHTML = "Application failed to mount.<br/>Please refresh the page to reset the cache.";
+        }
       }
-    }, 8000);
-
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(() => {});
-      });
-    }
+    }, 5000);
   </script>
 </body>
 </html>
