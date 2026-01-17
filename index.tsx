@@ -1,26 +1,30 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App.tsx';
+import App from './App';
 
-console.log("GeoMesh: index.tsx executing...");
+console.log("GeoMesh: index.tsx booting...");
 
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  console.error("GeoMesh: Root element #root not found!");
-  throw new Error("Could not find root element to mount to");
-}
+const mount = () => {
+  const rootElement = document.getElementById('root');
+  if (!rootElement) return;
 
-try {
-  const root = ReactDOM.createRoot(rootElement);
-  console.log("GeoMesh: React root created, rendering...");
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
-  // Mark as successfully mounted for the bootloader
-  (window as any).__GEOMESH_MOUNTED__ = true;
-} catch (err) {
-  console.error("GeoMesh: Render failed", err);
+  try {
+    const root = ReactDOM.createRoot(rootElement);
+    root.render(
+      <React.StrictMode>
+        <App />
+      </React.StrictMode>
+    );
+    (window as any).__GEOMESH_MOUNTED__ = true;
+    console.log("GeoMesh: App mounted successfully.");
+  } catch (err) {
+    console.error("GeoMesh: Mounting failed", err);
+  }
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mount);
+} else {
+  mount();
 }

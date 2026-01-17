@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'geomesh-v5'; 
+const CACHE_NAME = 'geomesh-v6'; 
 const ASSETS = [
   './',
   './index.html',
@@ -29,9 +29,9 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   
-  // CRITICAL: Bypass SW entirely for source files to avoid MIME type errors
-  // in environments where the server handles TSX transpilation.
-  if (url.pathname.endsWith('.tsx') || url.pathname.endsWith('.ts')) {
+  // BYPASS: Never handle .tsx, .ts, or .jsx files in the service worker.
+  // This ensures the browser receives the correctly transpiled response from the server.
+  if (url.pathname.match(/\.(tsx|ts|jsx)$/)) {
     return;
   }
 
@@ -40,7 +40,7 @@ self.addEventListener('fetch', (event) => {
       if (cachedResponse) return cachedResponse;
 
       return fetch(event.request).then((response) => {
-        // Don't cache if not a successful internal GET request
+        // Only cache internal GET requests
         if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
           return response;
         }
@@ -51,10 +51,7 @@ self.addEventListener('fetch', (event) => {
         });
 
         return response;
-      }).catch(() => {
-        // Fallback or silent fail
-        return null;
-      });
+      }).catch(() => null);
     })
   );
 });

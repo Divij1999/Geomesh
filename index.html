@@ -35,18 +35,6 @@
   }
 }
 </script>
-
-<script>
-  window.addEventListener('error', function(e) {
-    if (e.target.tagName === 'SCRIPT') {
-      const status = document.getElementById('boot-status');
-      if (status) {
-        status.innerText = 'Sync Error: ' + (e.target.src ? e.target.src.split('/').pop() : 'Module');
-        status.style.color = '#ef4444';
-      }
-    }
-  }, true);
-</script>
 </head>
 <body>
   <div id="root">
@@ -55,38 +43,41 @@
       <div id="boot-status" style="color: #10b981; font-weight: 900; letter-spacing: 2px; font-size: 10px; text-transform: uppercase; margin-bottom: 10px;">Initializing Secure Mesh...</div>
       <div id="boot-subtext" style="color: #475569; font-size: 11px;">Loading P2P Protocols</div>
       
-      <button id="retry-btn" onclick="location.reload()" style="display: none; margin-top: 20px; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
-        Force Restart
+      <button id="retry-btn" onclick="clearAndReload()" style="display: none; margin-top: 20px; padding: 12px 24px; background: #10b981; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; font-size: 14px;">
+        Force Reset & Reload
       </button>
     </div>
   </div>
 
-  <script type="module">
-    // Diagnostic Timeout to detect if React failed to mount
+  <script>
+    function clearAndReload() {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+          for(let registration of registrations) registration.unregister();
+        });
+      }
+      localStorage.clear();
+      location.reload();
+    }
+
+    // Diagnostic Timeout
     setTimeout(() => {
       if (!window.__GEOMESH_MOUNTED__) {
         const status = document.getElementById('boot-status');
+        const subtext = document.getElementById('boot-subtext');
         const retryBtn = document.getElementById('retry-btn');
         if (status) {
-          status.innerText = "Boot Hang Detected";
+          status.innerText = "Boot Failure";
           status.style.color = '#ef4444';
         }
+        if (subtext) subtext.innerText = "Module initialization failed. This usually happens if the Service Worker caches raw source files.";
         if (retryBtn) retryBtn.style.display = 'block';
       }
-    }, 10000);
-  </script>
+    }, 6000);
 
-  <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        try {
-          // Use relative path directly to avoid 'Invalid URL' constructor issues
-          navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('GeoMesh: SW registered'))
-            .catch(e => console.warn('GeoMesh: SW registration failed', e));
-        } catch (err) {
-          console.warn('GeoMesh: SW initialization caught', err);
-        }
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
       });
     }
   </script>
