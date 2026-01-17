@@ -8,6 +8,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#10b981">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <style>
@@ -36,20 +37,15 @@
 </script>
 
 <script>
-  // Global error listener for module loading failures (captured in the capture phase)
   window.addEventListener('error', function(e) {
     if (e.target.tagName === 'SCRIPT') {
       const status = document.getElementById('boot-status');
       if (status) {
-        status.innerText = 'Script Load Error: ' + (e.target.src || 'Module');
+        status.innerText = 'Sync Error: ' + (e.target.src ? e.target.src.split('/').pop() : 'Module');
         status.style.color = '#ef4444';
       }
     }
   }, true);
-
-  window.addEventListener('unhandledrejection', function(event) {
-    console.error('Unhandled promise rejection:', event.reason);
-  });
 </script>
 </head>
 <body>
@@ -57,66 +53,40 @@
     <div id="boot-screen" style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a; text-align: center; padding: 20px;">
       <div class="loader"></div>
       <div id="boot-status" style="color: #10b981; font-weight: 900; letter-spacing: 2px; font-size: 10px; text-transform: uppercase; margin-bottom: 10px;">Initializing Secure Mesh...</div>
-      <div id="boot-subtext" style="color: #475569; font-size: 11px;">Loading peer-to-peer protocols</div>
+      <div id="boot-subtext" style="color: #475569; font-size: 11px;">Loading P2P Protocols</div>
       
       <button id="retry-btn" onclick="location.reload()" style="display: none; margin-top: 20px; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
-        Force Reload
+        Force Restart
       </button>
     </div>
   </div>
 
   <script type="module">
-    const status = document.getElementById('boot-status');
-    const subtext = document.getElementById('boot-subtext');
-    const retryBtn = document.getElementById('retry-btn');
-
-    const updateStatus = (text, isError = false) => {
-      if (!status) return;
-      status.innerText = text;
-      if (isError) {
-        status.style.color = '#ef4444';
-        if (retryBtn) retryBtn.style.display = 'block';
-        const loader = document.querySelector('.loader');
-        if (loader) loader.style.display = 'none';
-      }
-    };
-
-    // Pre-flight check logic
+    // Diagnostic Timeout to detect if React failed to mount
     setTimeout(() => {
-      // If the loader is still visible and the root is still showing boot-screen after 10s
-      if (document.getElementById('boot-screen') && !window.__GEOMESH_MOUNTED__) {
-        updateStatus("Boot taking too long...", true);
-        if (subtext) subtext.innerText = "The browser is struggling to load the P2P modules. Check your connection or try a different browser.";
+      if (!window.__GEOMESH_MOUNTED__) {
+        const status = document.getElementById('boot-status');
+        const retryBtn = document.getElementById('retry-btn');
+        if (status) {
+          status.innerText = "Boot Hang Detected";
+          status.style.color = '#ef4444';
+        }
+        if (retryBtn) retryBtn.style.display = 'block';
       }
-    }, 12000);
-
-    // Initial checks
-    if (!window.BroadcastChannel) {
-      updateStatus("Error: Browser lacks P2P Channel support", true);
-    } else if (!window.crypto || !window.crypto.subtle) {
-      updateStatus("Error: Secure context (HTTPS) required", true);
-    } else if (!navigator.geolocation) {
-      updateStatus("Error: GPS hardware not detected", true);
-    } else {
-      console.log("GeoMesh: Pre-flight diagnostics passed.");
-    }
+    }, 10000);
   </script>
 
-  <script type="module" src="./index.tsx"></script>
-  
   <script>
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         try {
-          const swUrl = new URL('sw.js', window.location.href).href;
-          navigator.serviceWorker.register(swUrl)
-            .then(reg => {
-              console.log('GeoMesh: SW registered');
-            })
-            .catch(err => {
-              console.warn('GeoMesh: SW skipped:', err.message);
-            });
-        } catch (e) {}
+          // Use relative path directly to avoid 'Invalid URL' constructor issues
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('GeoMesh: SW registered'))
+            .catch(e => console.warn('GeoMesh: SW registration failed', e));
+        } catch (err) {
+          console.warn('GeoMesh: SW initialization caught', err);
+        }
       });
     }
   </script>

@@ -1,9 +1,10 @@
 
 import { latLngToCell, gridDisk, cellToBoundary } from 'h3-js';
 
-export const H3_RESOLUTION = 7; // ~1.2km width hexagons
+export const H3_RESOLUTION = 7; 
 
 export const getH3Index = (lat: number, lng: number): string => {
+  console.log(`GeoMesh: Indexing lat:${lat} lng:${lng}`);
   return latLngToCell(lat, lng, H3_RESOLUTION);
 };
 
@@ -12,6 +13,7 @@ export const getNeighbors = (h3Index: string): string[] => {
 };
 
 export const getCurrentPosition = (): Promise<GeolocationPosition> => {
+  console.log("GeoMesh: Geolocation request starting...");
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
       reject(new Error("GEOLOCATION_NOT_SUPPORTED"));
@@ -20,13 +22,17 @@ export const getCurrentPosition = (): Promise<GeolocationPosition> => {
 
     const options = {
       enableHighAccuracy: true,
-      timeout: 8000, // 8 seconds
+      timeout: 10000, 
       maximumAge: 0
     };
 
     navigator.geolocation.getCurrentPosition(
-      resolve,
+      (pos) => {
+        console.log("GeoMesh: Geolocation lock acquired.");
+        resolve(pos);
+      },
       (err) => {
+        console.warn("GeoMesh: Geolocation error code:", err.code);
         let errorMsg = "UNKNOWN_LOCATION_ERROR";
         if (err.code === err.PERMISSION_DENIED) errorMsg = "PERMISSION_DENIED";
         if (err.code === err.POSITION_UNAVAILABLE) errorMsg = "POSITION_UNAVAILABLE";
