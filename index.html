@@ -1,0 +1,65 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>GeoMesh | P2P Proximity</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#10b981">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    body {
+      overscroll-behavior-y: contain;
+      background-color: #f8fafc;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #e2e8f0;
+      border-radius: 10px;
+    }
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "h3-js": "https://esm.sh/h3-js@^4.4.0"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="./index.tsx"></script>
+  <script>
+    // Robust SW registration for sandbox environments
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        const swPath = './sw.js';
+        navigator.serviceWorker.register(swPath, { scope: './' })
+          .then(reg => console.log('GeoMesh SW Ready:', reg.scope))
+          .catch(err => {
+            if (err.name === 'SecurityError') {
+              console.warn('PWA features limited in this sandbox (Origin Mismatch).');
+            } else {
+              console.error('SW Registration Failed:', err);
+            }
+          });
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,7 @@
+{
+  "name": "GeoMesh - Decentralized Proximity Chat",
+  "description": "A serverless, P2P proximity chat app using H3 hexagonal indexing and direct peer-to-peer messaging.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
