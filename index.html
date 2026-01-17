@@ -16,47 +16,81 @@
       background-color: #0f172a;
       -webkit-tap-highlight-color: transparent;
       margin: 0;
+      color: white;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .loader { width: 40px; height: 40px; border: 3px solid #10b981; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
-    .custom-scroll::-webkit-scrollbar { width: 4px; }
-    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-    .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
   </style>
+
 <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@19.0.0",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "h3-js": "https://esm.sh/h3-js@4.1.0",
+    "h3-js": "https://esm.sh/h3-js@4.1.0?bundle",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
     "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
+
+<script>
+  // Global error listener for module loading failures (captured in the capture phase)
+  window.addEventListener('error', function(e) {
+    if (e.target.tagName === 'SCRIPT') {
+      const status = document.getElementById('boot-status');
+      if (status) {
+        status.innerText = 'Script Load Error: ' + (e.target.src || 'Module');
+        status.style.color = '#ef4444';
+      }
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', function(event) {
+    console.error('Unhandled promise rejection:', event.reason);
+  });
+</script>
 </head>
 <body>
   <div id="root">
-    <div id="boot-screen" style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a;">
+    <div id="boot-screen" style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a; text-align: center; padding: 20px;">
       <div class="loader"></div>
-      <div id="boot-status" style="color: #10b981; font-weight: 900; letter-spacing: 2px; font-size: 10px; text-transform: uppercase;">Initializing Secure Mesh...</div>
+      <div id="boot-status" style="color: #10b981; font-weight: 900; letter-spacing: 2px; font-size: 10px; text-transform: uppercase; margin-bottom: 10px;">Initializing Secure Mesh...</div>
+      <div id="boot-subtext" style="color: #475569; font-size: 11px;">Loading peer-to-peer protocols</div>
+      
+      <button id="retry-btn" onclick="location.reload()" style="display: none; margin-top: 20px; padding: 10px 20px; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+        Force Reload
+      </button>
     </div>
   </div>
 
   <script type="module">
     const status = document.getElementById('boot-status');
+    const subtext = document.getElementById('boot-subtext');
+    const retryBtn = document.getElementById('retry-btn');
+
     const updateStatus = (text, isError = false) => {
       if (!status) return;
       status.innerText = text;
       if (isError) {
         status.style.color = '#ef4444';
+        if (retryBtn) retryBtn.style.display = 'block';
         const loader = document.querySelector('.loader');
         if (loader) loader.style.display = 'none';
       }
     };
 
-    // Diagnostics
+    // Pre-flight check logic
+    setTimeout(() => {
+      // If the loader is still visible and the root is still showing boot-screen after 10s
+      if (document.getElementById('boot-screen') && !window.__GEOMESH_MOUNTED__) {
+        updateStatus("Boot taking too long...", true);
+        if (subtext) subtext.innerText = "The browser is struggling to load the P2P modules. Check your connection or try a different browser.";
+      }
+    }, 12000);
+
+    // Initial checks
     if (!window.BroadcastChannel) {
       updateStatus("Error: Browser lacks P2P Channel support", true);
     } else if (!window.crypto || !window.crypto.subtle) {
@@ -66,46 +100,23 @@
     } else {
       console.log("GeoMesh: Pre-flight diagnostics passed.");
     }
-
-    window.onerror = function(msg, url, lineNo, columnNo, error) {
-      console.error('Boot Error:', msg, error);
-      updateStatus(`Fatal: ${msg}`, true);
-      return false;
-    };
   </script>
 
   <script type="module" src="./index.tsx"></script>
   
   <script>
-    // Robust Service Worker registration to handle cross-origin sandbox issues
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         try {
-          // Construct absolute URL relative to current document location 
-          // to avoid origin mismatch errors in sandboxed environments
           const swUrl = new URL('sw.js', window.location.href).href;
-          
           navigator.serviceWorker.register(swUrl)
             .then(reg => {
-              console.log('GeoMesh: ServiceWorker registered successfully');
-              reg.onupdatefound = () => {
-                const installingWorker = reg.installing;
-                if (!installingWorker) return;
-                installingWorker.onstatechange = () => {
-                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                    console.log('GeoMesh: New version available, reloading...');
-                    window.location.reload();
-                  }
-                };
-              };
+              console.log('GeoMesh: SW registered');
             })
             .catch(err => {
-              // We log but don't crash, as the app can work without the PWA features
-              console.warn('GeoMesh: ServiceWorker registration skipped:', err.message);
+              console.warn('GeoMesh: SW skipped:', err.message);
             });
-        } catch (e) {
-          console.warn('GeoMesh: SW initialization failed:', e);
-        }
+        } catch (e) {}
       });
     }
   </script>

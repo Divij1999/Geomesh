@@ -23,16 +23,21 @@ const App: React.FC = () => {
   );
 
   useEffect(() => {
+    let isMounted = true;
     const init = async () => {
-      console.log("GeoMesh: Starting secure boot...");
+      console.log("GeoMesh: Starting App component initialization...");
       try {
         // 1. Generate/Load Identity
+        console.log("GeoMesh: Step 1 - Identity...");
         const id = await generateIdentity();
+        if (!isMounted) return;
         setIdentity(id);
+        console.log("GeoMesh: Identity OK:", id.name);
         
         // 2. Request Location
-        console.log("GeoMesh: Requesting high-accuracy GPS fix...");
+        console.log("GeoMesh: Step 2 - Location...");
         const pos = await getCurrentPosition();
+        if (!isMounted) return;
         
         const index = getH3Index(pos.coords.latitude, pos.coords.longitude);
         setLocation({
@@ -41,13 +46,14 @@ const App: React.FC = () => {
           h3Index: index,
           neighbors: getNeighbors(index)
         });
-        console.log("GeoMesh: Mesh established at", index);
+        console.log("GeoMesh: Mesh location established.");
       } catch (err: any) {
-        console.error("GeoMesh: Boot failed.", err.message);
-        setErrorType(err.message);
+        console.error("GeoMesh: Initialization error:", err.message);
+        if (isMounted) setErrorType(err.message);
       }
     };
     init();
+    return () => { isMounted = false; };
   }, []);
 
   useEffect(() => {
@@ -61,45 +67,39 @@ const App: React.FC = () => {
     setInputValue('');
   };
 
-  // Error Recovery UI
   if (errorType) {
     const errorConfigs: Record<string, { title: string; desc: string; icon: string }> = {
       PERMISSION_DENIED: {
         title: "GPS Access Denied",
-        desc: "GeoMesh needs location to find peers nearby. Please enable Location Services for this site in your browser settings.",
+        desc: "GeoMesh needs location to find peers nearby. Please enable Location Services in your browser/device settings.",
         icon: "🚫"
       },
       TIMEOUT: {
         title: "GPS Lock Timeout",
-        desc: "Could not get a high-accuracy fix. Are you indoors? Try moving near a window or check your device GPS settings.",
+        desc: "Could not get a high-accuracy fix. Try moving closer to a window or outdoors.",
         icon: "⏳"
       },
       POSITION_UNAVAILABLE: {
         title: "Position Unavailable",
-        desc: "The device could not determine your location. Ensure your GPS is turned on.",
+        desc: "Device location unavailable. Ensure your GPS/Location services are enabled.",
         icon: "📍"
       }
     };
 
     const config = errorConfigs[errorType] || {
-      title: "Mesh Sync Error",
-      desc: "An unexpected error occurred during initialization. Please try again.",
+      title: "System Error",
+      desc: errorType || "Initialization failed.",
       icon: "⚠️"
     };
 
     return (
       <div className="h-screen flex flex-col items-center justify-center p-10 text-center bg-slate-900 text-white">
         <div className="text-6xl mb-6">{config.icon}</div>
-        <h2 className="text-2xl font-black mb-3 text-emerald-500">{config.title}</h2>
+        <h2 className="text-2xl font-black mb-3 text-emerald-500 uppercase tracking-tighter">{config.title}</h2>
         <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-xs">{config.desc}</p>
-        <div className="space-y-3 w-full max-w-xs">
-          <button onClick={() => window.location.reload()} className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform">
-            Retry Connection
-          </button>
-          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="w-full py-3 text-slate-500 text-xs font-bold uppercase tracking-widest">
-            Clear Local Cache
-          </button>
-        </div>
+        <button onClick={() => window.location.reload()} className="w-full max-w-xs py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform">
+          Retry
+        </button>
       </div>
     );
   }
@@ -152,15 +152,15 @@ const App: React.FC = () => {
             <ul className="space-y-4 text-sm text-slate-600">
               <li className="flex gap-3">
                 <span className="shrink-0 text-emerald-500 font-bold">01.</span>
-                <p><strong>Decentralized:</strong> Messages are broadcast over a virtual local mesh. No central servers store your data.</p>
+                <p><strong>Decentralized:</strong> Communication happens locally via the Mesh layer. No central database exists.</p>
               </li>
               <li className="flex gap-3">
                 <span className="shrink-0 text-emerald-500 font-bold">02.</span>
-                <p><strong>K-Anonymity:</strong> Your location is masked to a 1.2km hexagon. No one sees your exact GPS coordinates.</p>
+                <p><strong>K-Anonymity:</strong> Your location is rounded to a ~1.2km hexagon. No precise GPS is ever transmitted.</p>
               </li>
               <li className="flex gap-3">
                 <span className="shrink-0 text-emerald-500 font-bold">03.</span>
-                <p><strong>Self-Signed:</strong> Your device owns its private keys. Identicons visually verify your digital signature.</p>
+                <p><strong>Self-Signed:</strong> Your device owns its identity. Messages are cryptographically signed on-device.</p>
               </li>
             </ul>
             <button onClick={() => setShowHelp(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg">Understood</button>
@@ -175,7 +175,7 @@ const App: React.FC = () => {
           <div className="h-full flex flex-col items-center justify-center text-slate-300 text-center space-y-3 opacity-60">
             <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-4xl">📡</div>
             <div>
-              <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Zone Scanning</p>
+              <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Scanning Mesh</p>
               <p className="text-xs">Waiting for proximity pings in {formatH3(location.h3Index)}</p>
             </div>
           </div>
@@ -189,9 +189,8 @@ const App: React.FC = () => {
                   <p className="whitespace-pre-wrap break-words">{msg.text}</p>
                 </div>
                 <div className={`text-[9px] mt-1.5 font-black flex gap-2 items-center uppercase tracking-tighter ${msg.isMe ? 'justify-end text-slate-400' : 'text-slate-400'}`}>
-                  {msg.isVerified ? <span className="text-emerald-500">✓ Verified</span> : <span className="text-red-500">⚠ Error</span>}
+                  {msg.isVerified ? <span className="text-emerald-500 font-black">✓ Verified</span> : <span className="text-red-500">⚠ Error</span>}
                   <span>• {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                  <span>• Cell {formatH3(msg.h3Index)}</span>
                 </div>
               </div>
             </div>

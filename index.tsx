@@ -19,6 +19,8 @@ try {
       <App />
     </React.StrictMode>
   );
+  // Mark as successfully mounted for the bootloader
+  (window as any).__GEOMESH_MOUNTED__ = true;
 } catch (err) {
   console.error("GeoMesh: Render failed", err);
 }
