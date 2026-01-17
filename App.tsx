@@ -10,15 +10,13 @@ import { Radar } from './components/Radar.tsx';
 const App: React.FC = () => {
   const [identity, setIdentity] = useState<(UserIdentity & { privateKey: CryptoKey }) | null>(null);
   const [location, setLocation] = useState<GeoLocation | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<string | null>(null);
   const [inputValue, setInputValue] = useState('');
   const [showRadar, setShowRadar] = useState(false);
-  const [showPeers, setShowPeers] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const { activePeers, messages, sendMessage, clearChat } = useGeoSwarm(
+  const { activePeers, messages, sendMessage } = useGeoSwarm(
     location?.h3Index || '', 
     location?.neighbors || [],
     identity
@@ -26,11 +24,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
+      console.log("GeoMesh: Starting secure boot...");
       try {
+        // 1. Generate/Load Identity
         const id = await generateIdentity();
         setIdentity(id);
         
+        // 2. Request Location
+        console.log("GeoMesh: Requesting high-accuracy GPS fix...");
         const pos = await getCurrentPosition();
+        
         const index = getH3Index(pos.coords.latitude, pos.coords.longitude);
         setLocation({
           lat: pos.coords.latitude,
@@ -38,9 +41,10 @@ const App: React.FC = () => {
           h3Index: index,
           neighbors: getNeighbors(index)
         });
+        console.log("GeoMesh: Mesh established at", index);
       } catch (err: any) {
-        console.error("Init error:", err);
-        setError(err.message || "Location permission required for P2P mesh.");
+        console.error("GeoMesh: Boot failed.", err.message);
+        setErrorType(err.message);
       }
     };
     init();
@@ -57,68 +61,137 @@ const App: React.FC = () => {
     setInputValue('');
   };
 
-  if (error) return (
-    <div className="h-screen flex flex-col items-center justify-center p-8 text-center bg-white">
-      <div className="text-4xl mb-4">📍</div>
-      <h2 className="text-xl font-bold text-slate-900 mb-2">Connection Error</h2>
-      <p className="text-slate-500 text-sm mb-6">{error}</p>
-      <button onClick={() => window.location.reload()} className="px-6 py-2 bg-slate-900 text-white rounded-xl font-bold">Retry</button>
-    </div>
-  );
+  // Error Recovery UI
+  if (errorType) {
+    const errorConfigs: Record<string, { title: string; desc: string; icon: string }> = {
+      PERMISSION_DENIED: {
+        title: "GPS Access Denied",
+        desc: "GeoMesh needs location to find peers nearby. Please enable Location Services for this site in your browser settings.",
+        icon: "🚫"
+      },
+      TIMEOUT: {
+        title: "GPS Lock Timeout",
+        desc: "Could not get a high-accuracy fix. Are you indoors? Try moving near a window or check your device GPS settings.",
+        icon: "⏳"
+      },
+      POSITION_UNAVAILABLE: {
+        title: "Position Unavailable",
+        desc: "The device could not determine your location. Ensure your GPS is turned on.",
+        icon: "📍"
+      }
+    };
+
+    const config = errorConfigs[errorType] || {
+      title: "Mesh Sync Error",
+      desc: "An unexpected error occurred during initialization. Please try again.",
+      icon: "⚠️"
+    };
+
+    return (
+      <div className="h-screen flex flex-col items-center justify-center p-10 text-center bg-slate-900 text-white">
+        <div className="text-6xl mb-6">{config.icon}</div>
+        <h2 className="text-2xl font-black mb-3 text-emerald-500">{config.title}</h2>
+        <p className="text-slate-400 text-sm mb-8 leading-relaxed max-w-xs">{config.desc}</p>
+        <div className="space-y-3 w-full max-w-xs">
+          <button onClick={() => window.location.reload()} className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition-transform">
+            Retry Connection
+          </button>
+          <button onClick={() => { localStorage.clear(); window.location.reload(); }} className="w-full py-3 text-slate-500 text-xs font-bold uppercase tracking-widest">
+            Clear Local Cache
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (!location || !identity) return (
     <div className="h-screen flex flex-col items-center justify-center bg-slate-900 text-white">
-      <div className="w-10 h-10 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-      <div className="text-emerald-500 font-black tracking-widest text-xs animate-pulse">BOOTING SECURE MESH...</div>
+      <div className="w-12 h-12 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mb-6"></div>
+      <div className="text-emerald-500 font-black tracking-widest text-[10px] animate-pulse uppercase">
+        Establishing Mesh Context...
+      </div>
     </div>
   );
 
   return (
     <div className="flex flex-col h-[100dvh] max-w-md mx-auto bg-slate-50 overflow-hidden shadow-2xl relative">
-      <header className="bg-white border-b border-slate-100 p-4 z-30 shrink-0 flex items-center justify-between">
+      <header className="bg-white border-b border-slate-100 p-4 z-30 shrink-0 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={() => setShowPeers(true)} className="relative active:scale-95 transition-transform shrink-0">
+          <div className="relative shrink-0">
             <Identicon seed={identity.id} size={42} />
-          </button>
+          </div>
           <div className="overflow-hidden">
             <h1 className="font-black text-slate-900 text-lg leading-tight">GeoMesh</h1>
             <button onClick={() => setShowRadar(!showRadar)} className="text-[9px] font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded uppercase flex items-center gap-1">
               <span className="w-1 h-1 bg-emerald-500 rounded-full animate-ping"></span>
-              {formatH3(location.h3Index)}
+              Zone {formatH3(location.h3Index)}
             </button>
           </div>
         </div>
-        <button onClick={() => setShowHelp(true)} className="p-2 text-slate-400">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        </button>
+        <div className="flex items-center gap-1">
+          <div className="flex -space-x-2 mr-2">
+             {activePeers.slice(0, 3).map(p => (
+               <div key={p.id} className="ring-2 ring-white rounded-full">
+                 <Identicon seed={p.id} size={24} />
+               </div>
+             ))}
+          </div>
+          <button onClick={() => setShowHelp(true)} className="p-2 text-slate-300 active:text-slate-500">
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          </button>
+        </div>
       </header>
 
       {showHelp && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-6" onClick={() => setShowHelp(false)}>
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-xl font-black text-slate-900">Security Audit</h3>
-            <ul className="space-y-3 text-sm text-slate-600">
-              <li className="flex gap-2"><span>🛡️</span> <strong>Topic Salting:</strong> H3 indices are SHA-256 hashed with a salt before joining the swarm.</li>
-              <li className="flex gap-2"><span>✍️</span> <strong>Digital Signatures:</strong> Every message is signed with a P-256 ECDSA private key generated on-device.</li>
-              <li className="flex gap-2"><span>🕵️</span> <strong>K-Anonymity:</strong> Your location is masked by a ~1.2km hexagonal radius.</li>
+        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-6" onClick={() => setShowHelp(false)}>
+          <div className="bg-white rounded-[2rem] w-full max-w-sm p-8 space-y-6 shadow-2xl border border-white/20" onClick={e => e.stopPropagation()}>
+            <div className="text-center">
+              <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 text-3xl">🛡️</div>
+              <h3 className="text-2xl font-black text-slate-900">Privacy Protocol</h3>
+            </div>
+            <ul className="space-y-4 text-sm text-slate-600">
+              <li className="flex gap-3">
+                <span className="shrink-0 text-emerald-500 font-bold">01.</span>
+                <p><strong>Decentralized:</strong> Messages are broadcast over a virtual local mesh. No central servers store your data.</p>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 text-emerald-500 font-bold">02.</span>
+                <p><strong>K-Anonymity:</strong> Your location is masked to a 1.2km hexagon. No one sees your exact GPS coordinates.</p>
+              </li>
+              <li className="flex gap-3">
+                <span className="shrink-0 text-emerald-500 font-bold">03.</span>
+                <p><strong>Self-Signed:</strong> Your device owns its private keys. Identicons visually verify your digital signature.</p>
+              </li>
             </ul>
-            <button onClick={() => setShowHelp(false)} className="w-full py-3 bg-slate-900 text-white rounded-2xl font-bold shadow-lg">Close</button>
+            <button onClick={() => setShowHelp(false)} className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black shadow-lg">Understood</button>
           </div>
         </div>
       )}
 
-      {showRadar && <div className="absolute top-[73px] left-0 right-0 z-20 px-4"><Radar currentH3={location.h3Index} neighbors={location.neighbors} /></div>}
+      {showRadar && <div className="absolute top-[73px] left-0 right-0 z-20 px-4 animate-in slide-in-from-top duration-300"><Radar currentH3={location.h3Index} neighbors={location.neighbors} /></div>}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4 custom-scroll">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-6 space-y-4 custom-scroll scroll-smooth">
+        {messages.length === 0 && (
+          <div className="h-full flex flex-col items-center justify-center text-slate-300 text-center space-y-3 opacity-60">
+            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-4xl">📡</div>
+            <div>
+              <p className="text-sm font-black text-slate-400 uppercase tracking-widest">Zone Scanning</p>
+              <p className="text-xs">Waiting for proximity pings in {formatH3(location.h3Index)}</p>
+            </div>
+          </div>
+        )}
         {messages.map((msg) => (
           <div key={msg.id} className={`flex flex-col ${msg.isMe ? 'items-end' : 'items-start'}`}>
-            <div className={`flex max-w-[85%] gap-2.5 ${msg.isMe ? 'flex-row-reverse' : ''}`}>
-              {!msg.isMe && <Identicon seed={msg.senderId} size={30} />}
-              <div className={`px-4 py-2.5 rounded-2xl text-sm shadow-sm ${msg.isMe ? 'bg-emerald-600 text-white rounded-br-none' : 'bg-white text-slate-900 rounded-bl-none border border-slate-100'}`}>
-                <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.text}</p>
-                <div className={`text-[8px] mt-1.5 font-bold flex gap-2 items-center uppercase ${msg.isMe ? 'text-white/60' : 'text-slate-400'}`}>
-                  {msg.isVerified ? <span title="Verified Signature">✓ Signed</span> : <span className="text-red-500">⚠ Unverified</span>}
-                  <span>• {formatH3(msg.h3Index)}</span>
+            <div className={`flex max-w-[88%] gap-3 ${msg.isMe ? 'flex-row-reverse' : ''}`}>
+              {!msg.isMe && <Identicon seed={msg.senderId} size={32} />}
+              <div className="flex flex-col">
+                <div className={`px-4 py-3 rounded-2xl text-[15px] shadow-sm leading-snug ${msg.isMe ? 'bg-emerald-600 text-white rounded-br-none' : 'bg-white text-slate-900 rounded-bl-none border border-slate-100'}`}>
+                  <p className="whitespace-pre-wrap break-words">{msg.text}</p>
+                </div>
+                <div className={`text-[9px] mt-1.5 font-black flex gap-2 items-center uppercase tracking-tighter ${msg.isMe ? 'justify-end text-slate-400' : 'text-slate-400'}`}>
+                  {msg.isVerified ? <span className="text-emerald-500">✓ Verified</span> : <span className="text-red-500">⚠ Error</span>}
+                  <span>• {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>• Cell {formatH3(msg.h3Index)}</span>
                 </div>
               </div>
             </div>
@@ -126,18 +199,17 @@ const App: React.FC = () => {
         ))}
       </div>
 
-      <div className="p-4 bg-white border-t border-slate-100 shrink-0 pb-8">
-        <form onSubmit={handleSend} className="flex gap-3">
+      <div className="p-4 bg-white border-t border-slate-100 shrink-0 pb-8 safe-area-bottom">
+        <form onSubmit={handleSend} className="flex gap-2">
           <input
-            ref={inputRef}
             type="text"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            placeholder="Broadcast securely..."
-            className="flex-1 bg-slate-100 rounded-2xl px-5 py-4 text-slate-900 focus:outline-none focus:ring-2 ring-emerald-500/20"
+            placeholder="Broadcast to local mesh..."
+            className="flex-1 bg-slate-50 border border-slate-200 rounded-[1.5rem] px-6 py-4 text-slate-900 focus:outline-none focus:ring-2 ring-emerald-500/20 text-base"
           />
-          <button type="submit" disabled={!inputValue.trim()} className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center shadow-xl active:scale-90 transition-transform disabled:opacity-20 shrink-0">
-            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+          <button type="submit" disabled={!inputValue.trim()} className="w-14 h-14 bg-emerald-600 text-white rounded-[1.5rem] flex items-center justify-center shadow-lg shadow-emerald-500/20 active:scale-90 transition-transform disabled:opacity-30 shrink-0">
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-current rotate-45"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
           </button>
         </form>
       </div>

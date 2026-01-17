@@ -13,51 +13,63 @@
   <style>
     body {
       overscroll-behavior-y: contain;
-      background-color: #f8fafc;
+      background-color: #0f172a;
       -webkit-tap-highlight-color: transparent;
+      margin: 0;
     }
-    .custom-scroll::-webkit-scrollbar {
-      width: 4px;
-    }
-    .custom-scroll::-webkit-scrollbar-track {
-      background: transparent;
-    }
-    .custom-scroll::-webkit-scrollbar-thumb {
-      background: #e2e8f0;
-      border-radius: 10px;
-    }
-    .no-scrollbar::-webkit-scrollbar {
-      display: none;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader { width: 40px; height: 40px; border: 3px solid #10b981; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+    .custom-scroll::-webkit-scrollbar { width: 4px; }
+    .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+    .custom-scroll::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
   </style>
 <script type="importmap">
 {
   "imports": {
+    "react": "https://esm.sh/react@19.0.0",
+    "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
+    "h3-js": "https://esm.sh/h3-js@4.1.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "h3-js": "https://esm.sh/h3-js@^4.4.0"
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
 </head>
 <body>
   <div id="root">
-    <div style="height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; color: #64748b;">
-      Loading GeoMesh...
+    <div id="boot-screen" style="height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: sans-serif; background: #0f172a;">
+      <div class="loader"></div>
+      <div id="boot-status" style="color: #10b981; font-weight: 900; letter-spacing: 2px; font-size: 10px; text-transform: uppercase;">Initializing Secure Mesh...</div>
     </div>
   </div>
-  
+
   <script type="module">
-    window.onerror = function(msg, url, lineNo, columnNo, error) {
-      const root = document.getElementById('root');
-      if (root) {
-        root.innerHTML = `<div style="padding: 2rem; text-align: center;">
-          <h1 style="color: #ef4444;">App failed to load</h1>
-          <p style="font-size: 0.8rem; color: #64748b;">${msg}</p>
-          <button onclick="location.reload()" style="padding: 0.5rem 1rem; background: #0f172a; color: white; border-radius: 0.5rem; border: none; cursor: pointer;">Retry</button>
-        </div>`;
+    const status = document.getElementById('boot-status');
+    const updateStatus = (text, isError = false) => {
+      if (!status) return;
+      status.innerText = text;
+      if (isError) {
+        status.style.color = '#ef4444';
+        const loader = document.querySelector('.loader');
+        if (loader) loader.style.display = 'none';
       }
+    };
+
+    // Diagnostics
+    if (!window.BroadcastChannel) {
+      updateStatus("Error: Browser lacks P2P Channel support", true);
+    } else if (!window.crypto || !window.crypto.subtle) {
+      updateStatus("Error: Secure context (HTTPS) required", true);
+    } else if (!navigator.geolocation) {
+      updateStatus("Error: GPS hardware not detected", true);
+    } else {
+      console.log("GeoMesh: Pre-flight diagnostics passed.");
+    }
+
+    window.onerror = function(msg, url, lineNo, columnNo, error) {
+      console.error('Boot Error:', msg, error);
+      updateStatus(`Fatal: ${msg}`, true);
       return false;
     };
   </script>
@@ -65,11 +77,35 @@
   <script type="module" src="./index.tsx"></script>
   
   <script>
+    // Robust Service Worker registration to handle cross-origin sandbox issues
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js', { scope: './' })
-          .then(reg => console.log('SW Ready'))
-          .catch(err => console.warn('SW Failed:', err));
+        try {
+          // Construct absolute URL relative to current document location 
+          // to avoid origin mismatch errors in sandboxed environments
+          const swUrl = new URL('sw.js', window.location.href).href;
+          
+          navigator.serviceWorker.register(swUrl)
+            .then(reg => {
+              console.log('GeoMesh: ServiceWorker registered successfully');
+              reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                if (!installingWorker) return;
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('GeoMesh: New version available, reloading...');
+                    window.location.reload();
+                  }
+                };
+              };
+            })
+            .catch(err => {
+              // We log but don't crash, as the app can work without the PWA features
+              console.warn('GeoMesh: ServiceWorker registration skipped:', err.message);
+            });
+        } catch (e) {
+          console.warn('GeoMesh: SW initialization failed:', e);
+        }
       });
     }
   </script>

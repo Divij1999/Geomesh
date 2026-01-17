@@ -14,14 +14,27 @@ export const getNeighbors = (h3Index: string): string[] => {
 export const getCurrentPosition = (): Promise<GeolocationPosition> => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error("Geolocation not supported by this browser."));
+      reject(new Error("GEOLOCATION_NOT_SUPPORTED"));
       return;
     }
-    navigator.geolocation.getCurrentPosition(resolve, reject, {
+
+    const options = {
       enableHighAccuracy: true,
-      timeout: 10000,
+      timeout: 8000, // 8 seconds
       maximumAge: 0
-    });
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (err) => {
+        let errorMsg = "UNKNOWN_LOCATION_ERROR";
+        if (err.code === err.PERMISSION_DENIED) errorMsg = "PERMISSION_DENIED";
+        if (err.code === err.POSITION_UNAVAILABLE) errorMsg = "POSITION_UNAVAILABLE";
+        if (err.code === err.TIMEOUT) errorMsg = "TIMEOUT";
+        reject(new Error(errorMsg));
+      },
+      options
+    );
   });
 };
 
