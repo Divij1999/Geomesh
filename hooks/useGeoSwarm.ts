@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Message, Peer, UserIdentity } from '../types';
-import { getDiscoveryTopic, signMessage, verifyMessage } from '../utils/crypto';
+import { Message, Peer, UserIdentity } from '../types.ts';
+import { getDiscoveryTopic, signMessage, verifyMessage } from '../utils/crypto.ts';
 
 const STORAGE_KEY = 'geomesh_chat_history_v2';
 const PEER_TIMEOUT = 30000;
@@ -105,5 +105,8 @@ export const useGeoSwarm = (h3Index: string, neighbors: string[], identity: (Use
     });
   }, [identity, h3Index]);
 
-  return { activePeers, messages, sendMessage, clearChat: () => setMessages([]) };
+  return { activePeers, messages, sendMessage, clearChat: () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setMessages([]);
+  }};
 };

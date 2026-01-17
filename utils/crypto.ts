@@ -1,18 +1,13 @@
 
-import { UserIdentity } from '../types';
+import { UserIdentity } from '../types.ts';
 
-// A "System Salt" to prevent trivial reverse-mapping of H3 topics
 const SYSTEM_SALT = "geomesh_v1_proximity_layer";
 
 export const generateIdentity = async (): Promise<UserIdentity & { privateKey: CryptoKey }> => {
   const stored = localStorage.getItem('geomesh_identity_v2');
-  if (stored) {
-    const data = JSON.parse(stored);
-    // In a real app, we'd store the private key in IndexedDB or a secure vault.
-    // For this PWA demo, we regenerate/import if needed, but here we'll 
-    // generate a fresh one if not found to ensure real signing.
-  }
-
+  
+  // We always generate a fresh ephemeral key for this demo's signing session
+  // unless we were to store the private key in IndexedDB (localStorage can't store CryptoKey)
   const keyPair = await window.crypto.subtle.generateKey(
     {
       name: "ECDSA",
@@ -25,15 +20,20 @@ export const generateIdentity = async (): Promise<UserIdentity & { privateKey: C
   const publicKeyBuffer = await window.crypto.subtle.exportKey("spki", keyPair.publicKey);
   const publicKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(publicKeyBuffer)));
 
-  const id = publicKeyBase64.substring(0, 16);
-  const names = ["Shadow", "Beacon", "Glider", "Vortex", "Cipher", "Hex", "Drift"];
-  const name = `${names[Math.floor(Math.random() * names.length)]}_${Math.floor(Math.random() * 999)}`;
-  
-  const identity = {
-    id,
-    name,
-    publicKey: publicKeyBase64,
-  };
+  let identity: UserIdentity;
+  if (stored) {
+    const data = JSON.parse(stored);
+    // Keep the name/id if they already exist, but update the public key for the current session
+    identity = {
+      ...data,
+      publicKey: publicKeyBase64
+    };
+  } else {
+    const id = publicKeyBase64.substring(0, 16);
+    const names = ["Shadow", "Beacon", "Glider", "Vortex", "Cipher", "Hex", "Drift"];
+    const name = `${names[Math.floor(Math.random() * names.length)]}_${Math.floor(Math.random() * 999)}`;
+    identity = { id, name, publicKey: publicKeyBase64 };
+  }
 
   localStorage.setItem('geomesh_identity_v2', JSON.stringify(identity));
   
