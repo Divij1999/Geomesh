@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { formatH3 } from '../utils/location';
+import { formatH3 } from '../utils/location.ts';
 
 interface RadarProps {
   currentH3: string;
