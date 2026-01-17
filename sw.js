@@ -1,5 +1,7 @@
 
-const CACHE_NAME = 'geomesh-v8-nuclear';
+importScripts('https://unpkg.com/@babel/standalone/babel.min.js');
+
+const CACHE_NAME = 'geomesh-compiler-v9';
 const ASSETS = [
   './',
   './index.html',
@@ -10,62 +12,54 @@ const ASSETS = [
 self.addEventListener('install', (event) => {
   self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      // Only cache static assets, never code files during install
-      return Promise.allSettled(ASSETS.map(url => cache.add(url)));
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-      );
-    })
-  );
-  self.clients.claim();
+  event.waitUntil(self.clients.claim());
 });
 
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
-  
-  // CRITICAL FIX:
-  // Strictly bypass the cache for any file that looks like source code (.tsx, .ts, .jsx).
-  // These MUST go to the server to be transpiled into valid JavaScript.
-  // If we serve them from cache, the browser gets raw text/octet-stream and crashes.
-  if (url.pathname.match(/\.(tsx|ts|jsx)$/)) {
-    return; // Fallback to network only
-  }
 
-  // Also bypass cache for the hot module replacement (HMR) if present
-  if (url.pathname.includes('hmr') || url.pathname.includes('hot-update')) {
+  // Transpile TS/TSX files on the fly
+  if (url.pathname.endsWith('.tsx') || url.pathname.endsWith('.ts')) {
+    event.respondWith(
+      (async () => {
+        try {
+          const response = await fetch(event.request);
+          const text = await response.text();
+          
+          // Use Babel to transform TSX -> JS
+          const output = Babel.transform(text, {
+            filename: url.pathname,
+            presets: ['react', 'typescript'],
+            plugins: [],
+            retainLines: true
+          }).code;
+
+          return new Response(output, {
+            headers: { 
+              'Content-Type': 'application/javascript',
+              'Cache-Control': 'no-cache'
+            }
+          });
+        } catch (err) {
+          console.error('Compilation failed for:', url.pathname, err);
+          return new Response(`console.error("Compile Error: ${err.message}");`, {
+            headers: { 'Content-Type': 'application/javascript' }
+          });
+        }
+      })()
+    );
     return;
   }
 
+  // Default cache strategy for other assets
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) return cachedResponse;
-
-      return fetch(event.request).then((response) => {
-        // Only cache valid 200 responses that are basic GET requests
-        if (!response || response.status !== 200 || response.type !== 'basic' || event.request.method !== 'GET') {
-          return response;
-        }
-
-        // Double check: Never cache source files even if we fetched them
-        if (url.pathname.match(/\.(tsx|ts|jsx)$/)) {
-          return response;
-        }
-
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      }).catch(() => null);
+    caches.match(event.request).then(cached => {
+      return cached || fetch(event.request);
     })
   );
 });

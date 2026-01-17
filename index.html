@@ -8,23 +8,8 @@
   <link rel="stylesheet" href="./styles.css">
   <link rel="manifest" href="./manifest.json">
   <meta name="theme-color" content="#008069">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-
-  <!-- EMERGENCY SW CLEANUP: Run this before anything else -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then(function(registrations) {
-        for(let registration of registrations) {
-          // Unregister existing SWs to clear the MIME type error cache
-          registration.unregister();
-        }
-      });
-    }
-  </script>
-
-<script type="importmap">
+  
+  <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@19.0.0",
@@ -41,44 +26,48 @@
   <div id="root">
     <div id="boot-screen" class="boot-screen">
       <div class="loader"></div>
-      <div id="boot-status" class="boot-status">Establishing Secure Mesh...</div>
-      <div id="boot-subtext" class="boot-subtext">Initializing P2P Protocols</div>
+      <div id="boot-status" class="boot-status">Installing Mesh Protocol...</div>
     </div>
   </div>
 
-  <!-- MAIN ENTRY POINT -->
-  <script type="module" src="./index.tsx"></script>
-
   <script>
-    // Only register the NEW Service Worker after the app has successfully loaded
-    // This prevents the race condition where the SW caches the index.tsx before it's ready
-    window.addEventListener('load', () => {
-      // Delay registration slightly to prioritize main thread rendering
-      setTimeout(() => {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('./sw.js').then(reg => {
-            console.log('SW Registered');
-          }).catch(err => {
-            console.log('SW Registration failed', err);
-          });
-        }
-      }, 1000);
-    });
-
-    // Fallback error handler
-    setTimeout(() => {
-      if (!window.__GEOMESH_MOUNTED__) {
-        const status = document.getElementById('boot-status');
-        const subtext = document.getElementById('boot-subtext');
-        if (status) {
-          status.innerText = "Boot Error";
-          status.style.color = '#ef4444';
-        }
-        if (subtext) {
-          subtext.innerHTML = "Application failed to mount.<br/>Please refresh the page to reset the cache.";
-        }
+    async function boot() {
+      if (!('serviceWorker' in navigator)) {
+        document.getElementById('boot-status').innerText = "Service Worker Not Supported";
+        return;
       }
-    }, 5000);
+
+      try {
+        // Register the compiler Service Worker
+        const reg = await navigator.serviceWorker.register('./sw.js');
+        
+        // Wait for it to be active
+        if (reg.installing) {
+          await new Promise(resolve => {
+             const worker = reg.installing;
+             worker.addEventListener('statechange', () => {
+               if (worker.state === 'activated') resolve();
+             });
+          });
+        } else if (!navigator.serviceWorker.controller) {
+          // If registered but not controlling, reload to take control
+          window.location.reload();
+          return;
+        }
+
+        // Now that SW is controlling, inject the main entry point
+        const script = document.createElement('script');
+        script.type = 'module';
+        script.src = './index.tsx';
+        document.body.appendChild(script);
+
+      } catch (err) {
+        console.error("Boot failed:", err);
+        document.getElementById('boot-status').innerText = "Boot Failed. Check Console.";
+      }
+    }
+
+    boot();
   </script>
 </body>
 </html>
